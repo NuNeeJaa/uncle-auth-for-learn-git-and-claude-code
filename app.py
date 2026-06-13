@@ -5,6 +5,9 @@ app.py
 logic ทั้งหมดย้ายไปอยู่ใน accounts.py / security.py / storage.py
 """
 
+import os
+import secrets
+
 from flask import (
     Flask,
     flash,
@@ -18,7 +21,30 @@ from flask import (
 import accounts
 
 app = Flask(__name__)
-app.secret_key = "uncle-engineer-dev-secret"  # demo เท่านั้น ของจริงเก็บใน env
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_urlsafe(32)
+
+
+def _get_csrf_token() -> str:
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def _validate_csrf_token() -> bool:
+    session_token = session.get("csrf_token")
+    form_token = request.form.get("csrf_token", "")
+    return bool(
+        session_token
+        and form_token
+        and secrets.compare_digest(session_token, form_token)
+    )
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {"csrf_token": _get_csrf_token}
 
 
 @app.route("/")
@@ -31,6 +57,9 @@ def index():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
+        if not _validate_csrf_token():
+            flash("คำขอไม่ถูกต้อง", "error")
+            return redirect(url_for("register"))
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         try:
@@ -45,6 +74,9 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
+        if not _validate_csrf_token():
+            flash("คำขอไม่ถูกต้อง", "error")
+            return redirect(url_for("login"))
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         if accounts.authenticate(username, password):
@@ -65,6 +97,9 @@ def dashboard():
 def change_password():
     if "username" not in session:
         return redirect(url_for("login"))
+    if not _validate_csrf_token():
+        flash("คำขอไม่ถูกต้อง", "error")
+        return redirect(url_for("dashboard"))
     old_password = request.form.get("old_password", "")
     new_password = request.form.get("new_password", "")
     try:
