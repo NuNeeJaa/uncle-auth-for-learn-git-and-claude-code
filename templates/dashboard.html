@@ -4,6 +4,7 @@
   <h1>สวัสดี {{ username }}</h1>
   <p>เข้าสู่ระบบสำเร็จแล้ว</p>
   <form method="post" action="{{ url_for('change_password') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input name="old_password" type="password" placeholder="รหัสผ่านเดิม">
     <input name="new_password" type="password" placeholder="รหัสผ่านใหม่">
     <button type="submit">เปลี่ยนรหัสผ่าน</button>

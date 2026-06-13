@@ -3,6 +3,7 @@
 {% block content %}
   <h1>สมัครสมาชิก</h1>
   <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input name="username" placeholder="ชื่อผู้ใช้" autofocus>
     <input name="password" type="password" placeholder="รหัสผ่าน">
     <button type="submit">สมัครสมาชิก</button>

@@ -9,6 +9,7 @@ Integration test ของเว็บ uncle-auth — ทดสอบผ่า�
 
 import importlib
 import os
+import re
 import sys
 
 import pytest
@@ -36,19 +37,29 @@ def client(tmp_path):
 
 
 def _register(client, username, password):
+    res = client.get("/register")
+    csrf_token = _extract_csrf_token(res.get_data(as_text=True))
     return client.post(
         "/register",
-        data={"username": username, "password": password},
+        data={"username": username, "password": password, "csrf_token": csrf_token},
         follow_redirects=True,
     )
 
 
 def _login(client, username, password):
+    res = client.get("/login")
+    csrf_token = _extract_csrf_token(res.get_data(as_text=True))
     return client.post(
         "/login",
-        data={"username": username, "password": password},
+        data={"username": username, "password": password, "csrf_token": csrf_token},
         follow_redirects=True,
     )
+
+
+def _extract_csrf_token(html):
+    match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+    assert match, "CSRF token not found in form"
+    return match.group(1)
 
 
 # ---------- register ----------
@@ -96,6 +107,16 @@ def test_login_nonexistent_user_fails(client):
     assert "ไม่ถูกต้อง" in res.get_data(as_text=True)
 
 
+def test_login_without_csrf_token_is_rejected(client):
+    _register(client, "somchai", "pass1234")
+    res = client.post(
+        "/login",
+        data={"username": "somchai", "password": "pass1234"},
+        follow_redirects=True,
+    )
+    assert "คำขอไม่ถูกต้อง" in res.get_data(as_text=True)
+
+
 # ---------- protected page ----------
 
 def test_dashboard_requires_login(client):
@@ -109,9 +130,15 @@ def test_dashboard_requires_login(client):
 def test_change_password_with_correct_old_succeeds(client):
     _register(client, "somchai", "pass1234")
     _login(client, "somchai", "pass1234")
+    dashboard = client.get("/dashboard")
+    csrf_token = _extract_csrf_token(dashboard.get_data(as_text=True))
     res = client.post(
         "/change-password",
-        data={"old_password": "pass1234", "new_password": "newpass99"},
+        data={
+            "old_password": "pass1234",
+            "new_password": "newpass99",
+            "csrf_token": csrf_token,
+        },
         follow_redirects=True,
     )
     assert "เปลี่ยนรหัสผ่านสำเร็จ" in res.get_data(as_text=True)
@@ -124,9 +151,15 @@ def test_change_password_with_correct_old_succeeds(client):
 def test_change_password_with_wrong_old_fails(client):
     _register(client, "somchai", "pass1234")
     _login(client, "somchai", "pass1234")
+    dashboard = client.get("/dashboard")
+    csrf_token = _extract_csrf_token(dashboard.get_data(as_text=True))
     res = client.post(
         "/change-password",
-        data={"old_password": "WRONG", "new_password": "newpass99"},
+        data={
+            "old_password": "WRONG",
+            "new_password": "newpass99",
+            "csrf_token": csrf_token,
+        },
         follow_redirects=True,
     )
     assert "รหัสผ่านเดิมไม่ถูกต้อง" in res.get_data(as_text=True)
